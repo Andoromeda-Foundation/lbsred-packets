@@ -90,260 +90,50 @@ public:
           std::make_tuple(_self, taker, amount, std::string("")))
           .send();
     });
-
-    /*
-    uint64_t amount = Red[sender]->take(taker);
-    action(
-        permission_level{_self, N(active)},
-        N(eosio.token), N(transfer),
-        std::make_tuple(_self, taker, amount, std::string("")))
-        .send();
-      */
   }
+
+  //@abi action
+  void add_whitelist(const account_name sender, const uint64_t red_package_id, const account_name target)
+  {
+    require_auth(sender);
+    auto itr = red_packages.find(red_package_id);    
+    eosio_assert(itr != red_packages.end(), "This Red Envelope is not exist.");
+    eosio_assert(itr->sender == sender, "This red package does not belongs to you.");    
+
+    red_packages.modify(itr, 0, [&](auto &package) {
+      package.whitelist.push_back(target);
+    });    
+  }  
   //@abi action
   void offerbet(const asset &bet, const account_name player, const checksum256 &commitment)
   {
-
-    eosio_assert(bet.symbol == CORE_SYMBOL, "only core token allowed");
-    eosio_assert(bet.is_valid(), "invalid bet");
-    eosio_assert(bet.amount > 0, "must bet positive quantity");
-
-    eosio_assert(!has_offer(commitment), "offer with this commitment already exist");
-    require_auth(player);
-
-    auto cur_player_itr = accounts.find(player);
-    eosio_assert(cur_player_itr != accounts.end(), "unknown account");
-
-    // Store new offer
-    auto new_offer_itr = offers.emplace(_self, [&](auto &offer) {
-      offer.id = offers.available_primary_key();
-      offer.bet = bet;
-      offer.owner = player;
-      offer.commitment = commitment;
-      offer.gameid = 0;
-    });
-
-    // Try to find a matching bet
-    auto idx = offers.template get_index<N(bet)>();
-    auto matched_offer_itr = idx.lower_bound((uint64_t)new_offer_itr->bet.amount);
-
-    if (matched_offer_itr == idx.end() || matched_offer_itr->bet != new_offer_itr->bet || matched_offer_itr->owner == new_offer_itr->owner)
-    {
-
-      // No matching bet found, update player's account
-      accounts.modify(cur_player_itr, 0, [&](auto &acnt) {
-        eosio_assert(acnt.eos_balance >= bet, "insufficient balance");
-        acnt.eos_balance -= bet;
-        acnt.open_offers++;
-      });
-    }
-    else
-    {
-      // Create global game counter if not exists
-      auto gdice_itr = global_dices.begin();
-      if (gdice_itr == global_dices.end())
-      {
-        gdice_itr = global_dices.emplace(_self, [&](auto &gdice) {
-          gdice.nextgameid = 0;
-        });
-      }
-
-      // Increment global game counter
-      global_dices.modify(gdice_itr, 0, [&](auto &gdice) {
-        gdice.nextgameid++;
-      });
-
-      // Create a new game
-      auto game_itr = games.emplace(_self, [&](auto &new_game) {
-        new_game.id = gdice_itr->nextgameid;
-        new_game.bet = new_offer_itr->bet;
-        new_game.deadline = eosio::time_point_sec(0);
-
-        new_game.player1.commitment = matched_offer_itr->commitment;
-        memset(&new_game.player1.reveal, 0, sizeof(checksum256));
-
-        new_game.player2.commitment = new_offer_itr->commitment;
-        memset(&new_game.player2.reveal, 0, sizeof(checksum256));
-      });
-
-      // Update player's offers
-      idx.modify(matched_offer_itr, 0, [&](auto &offer) {
-        offer.bet.amount = 0;
-        offer.gameid = game_itr->id;
-      });
-
-      offers.modify(new_offer_itr, 0, [&](auto &offer) {
-        offer.bet.amount = 0;
-        offer.gameid = game_itr->id;
-      });
-
-      // Update player's accounts
-      accounts.modify(accounts.find(matched_offer_itr->owner), 0, [&](auto &acnt) {
-        acnt.open_offers--;
-        acnt.open_games++;
-      });
-
-      accounts.modify(cur_player_itr, 0, [&](auto &acnt) {
-        eosio_assert(acnt.eos_balance >= bet, "insufficient balance");
-        acnt.eos_balance -= bet;
-        acnt.open_games++;
-      });
-    }
   }
 
-  //@abi action
-  void canceloffer(const checksum256 &commitment)
-  {
-
-    auto idx = offers.template get_index<N(commitment)>();
-    auto offer_itr = idx.find(offer::get_commitment(commitment));
-
-    eosio_assert(offer_itr != idx.end(), "offer does not exists");
-    eosio_assert(offer_itr->gameid == 0, "unable to cancel offer");
-    require_auth(offer_itr->owner);
-
-    auto acnt_itr = accounts.find(offer_itr->owner);
-    accounts.modify(acnt_itr, 0, [&](auto &acnt) {
-      acnt.open_offers--;
-      acnt.eos_balance += offer_itr->bet;
-    });
-
-    idx.erase(offer_itr);
-  }
 
   //@abi action
   void reveal(const checksum256 &commitment, const checksum256 &source)
   {
-
-    assert_sha256((char *)&source, sizeof(source), (const checksum256 *)&commitment);
-
-    auto idx = offers.template get_index<N(commitment)>();
-    auto curr_revealer_offer = idx.find(offer::get_commitment(commitment));
-
-    eosio_assert(curr_revealer_offer != idx.end(), "offer not found");
-    eosio_assert(curr_revealer_offer->gameid > 0, "unable to reveal");
-
-    auto game_itr = games.find(curr_revealer_offer->gameid);
-
-    player curr_reveal = game_itr->player1;
-    player prev_reveal = game_itr->player2;
-
-    if (!is_equal(curr_reveal.commitment, commitment))
-    {
-      std::swap(curr_reveal, prev_reveal);
-    }
-
-    eosio_assert(is_zero(curr_reveal.reveal) == true, "player already revealed");
-
-    if (!is_zero(prev_reveal.reveal))
-    {
-
-      checksum256 result;
-      sha256((char *)&game_itr->player1, sizeof(player) * 2, &result);
-
-      auto prev_revealer_offer = idx.find(offer::get_commitment(prev_reveal.commitment));
-
-      int winner = result.hash[1] < result.hash[0] ? 0 : 1;
-
-      if (winner)
-      {
-        pay_and_clean(*game_itr, *curr_revealer_offer, *prev_revealer_offer);
-      }
-      else
-      {
-        pay_and_clean(*game_itr, *prev_revealer_offer, *curr_revealer_offer);
-      }
-    }
-    else
-    {
-      games.modify(game_itr, 0, [&](auto &game) {
-        if (is_equal(curr_reveal.commitment, game.player1.commitment))
-          game.player1.reveal = source;
-        else
-          game.player2.reveal = source;
-
-        game.deadline = eosio::time_point_sec(now() + FIVE_MINUTES);
-      });
-    }
   }
 
   //@abi action
-  void claimexpired(const uint64_t gameid)
+  void claimexpired(const account_name sender, const uint64_t red_package_id)
   {
-
-    auto game_itr = games.find(gameid);
-
-    eosio_assert(game_itr != games.end(), "game not found");
-    eosio_assert(game_itr->deadline != eosio::time_point_sec(0) && eosio::time_point_sec(now()) > game_itr->deadline, "game not expired");
-
-    auto idx = offers.template get_index<N(commitment)>();
-    auto player1_offer = idx.find(offer::get_commitment(game_itr->player1.commitment));
-    auto player2_offer = idx.find(offer::get_commitment(game_itr->player2.commitment));
-
-    if (!is_zero(game_itr->player1.reveal))
-    {
-      eosio_assert(is_zero(game_itr->player2.reveal), "game error");
-      pay_and_clean(*game_itr, *player1_offer, *player2_offer);
-    }
-    else
-    {
-      eosio_assert(is_zero(game_itr->player1.reveal), "game error");
-      pay_and_clean(*game_itr, *player2_offer, *player1_offer);
-    }
+    require_auth(sender);    
+    auto itr = red_packages.find(red_package_id);
+    eosio_assert(itr != red_packages.end(), "Red package not found.");
+    eosio_assert(itr->sender == sender, "This red package does not belongs to you.");    
+    eosio_assert(itr->deadline != eosio::time_point_sec(0) && eosio::time_point_sec(now()) > itr->deadline, "Red package not expired");
+    // ...
   }
 
   //@abi action
   void deposit(const account_name from, const asset &quantity)
   {
-
-    eosio_assert(quantity.is_valid(), "invalid quantity");
-    eosio_assert(quantity.amount > 0, "must deposit positive quantity");
-
-    auto itr = accounts.find(from);
-    if (itr == accounts.end())
-    {
-      itr = accounts.emplace(_self, [&](auto &acnt) {
-        acnt.owner = from;
-      });
-    }
-
-    action(
-        permission_level{from, N(active)},
-        N(eosio.token), N(transfer),
-        std::make_tuple(from, _self, quantity, std::string("")))
-        .send();
-
-    accounts.modify(itr, 0, [&](auto &acnt) {
-      acnt.eos_balance += quantity;
-    });
   }
 
   //@abi action
   void withdraw(const account_name to, const asset &quantity)
   {
-    require_auth(to);
-
-    eosio_assert(quantity.is_valid(), "invalid quantity");
-    eosio_assert(quantity.amount > 0, "must withdraw positive quantity");
-
-    auto itr = accounts.find(to);
-    eosio_assert(itr != accounts.end(), "unknown account");
-
-    accounts.modify(itr, 0, [&](auto &acnt) {
-      eosio_assert(acnt.eos_balance >= quantity, "insufficient balance");
-      acnt.eos_balance -= quantity;
-    });
-
-    action(
-        permission_level{_self, N(active)},
-        N(eosio.token), N(transfer),
-        std::make_tuple(_self, to, quantity, std::string("")))
-        .send();
-
-    if (itr->is_empty())
-    {
-      accounts.erase(itr);
-    }
   }
 
 private:
@@ -380,12 +170,14 @@ private:
   struct red
   {
     uint64_t id;
+    account_name sender;                      // Sender
     asset total_amount;                       // 总金额
     uint64_t people_limit;                    // 总人数
     std::string description;                  // 红包描述
     std::vector<account_name> ledger_account; // 红包账本
     std::vector<asset> ledger_asset;          // ..
     eosio::time_point_sec deadline;           // 撤回
+    std::vector<account_name> whitelist;
 
     uint64_t lat, lng;
     uint64_t r1, r2;
@@ -403,7 +195,7 @@ private:
       ledger_asset.back() /= people_limit;
       return ledger_asset.back();
     }
-    EOSLIB_SERIALIZE(red, (id)(total_amount)(people_limit)(description)(ledger_account)(ledger_asset)(deadline)(lat)(lng)(r1)(r2))
+    EOSLIB_SERIALIZE(red, (id)(sender)(total_amount)(people_limit)(description)(ledger_account)(ledger_asset)(deadline)(whitelist)(lat)(lng)(r1)(r2))
   };
   typedef eosio::multi_index<N(red), red> red_packages_index;
 
