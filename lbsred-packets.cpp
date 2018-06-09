@@ -21,57 +21,28 @@ using eosio::name;
 using eosio::permission_level;
 using eosio::print;
 
-class red
-{
-public:
-  uint64_t id;                  
-  asset total_amount;                      // 总金额  
-  uint64_t people_limit;                   // 总人数
-  std::string description;                 // 红包描述
-  std::map<account_name, uint64_t> ledger; // 红包账本
-  eosio::time_point_sec deadline;
-
-  uint64_t primary_key() const { return id; }
- 
-
-  uint64_t take(account_name taker)
-  {
-    /*
-    require_auth(taker);
-    eosio_assert(ledger.find(taker) == ledger.end(), "Already take one!");
-    uint64_t amount = total_amount / people_limit;
-    ledger[taker] = amount;
-    return amount;*/
-  }
-  EOSLIB_SERIALIZE(red, (id)(total_amount)(people_limit)(description)(ledger))   
-};
-
-class lbs_red : public red
-{
-  double lat;
-  double lng;
-  double r1, r2;
-};
-
 class dice : public eosio::contract
 {
 public:
   const uint32_t FIVE_MINUTES = 5 * 60;
+
+  
+  // class lbs_red : public red
+  // {
+  //   double lat;
+  //   double lng;
+  //   double r1, r2;
+  // };
 
   dice(account_name self)
       : eosio::contract(self),
         offers(_self, _self),
         games(_self, _self),
         global_dices(_self, _self),
-        accounts(_self, _self),
-        red_packages(_self, _self)
+        red_packages(_self, _self),
+        accounts(_self, _self)
   {
   }
-
-  
-
-  std::map<account_name, red *> Red;
-
   void sent(const account_name from, const asset &total_amount, const uint64_t people_limit)
   {
     eosio_assert(total_amount.is_valid(), "invalid bet");
@@ -79,42 +50,48 @@ public:
 
     eosio_assert(people_limit > 0, "must bet positive quantity");
 
-      // Create global red package counter if not exists
-      auto gdice_itr = global_dices.begin();
-      if (gdice_itr == global_dices.end())
-      {
-        gdice_itr = global_dices.emplace(_self, [&](auto &gdice) {
-          gdice.nextgameid = 0;
-        });
-      }
-
-      // Increment global red package counter
-      global_dices.modify(gdice_itr, 0, [&](auto &gdice) {
-        gdice.nextgameid++;
+    // Create global red package counter if not exists
+    auto gdice_itr = global_dices.begin();
+    if (gdice_itr == global_dices.end())
+    {
+      gdice_itr = global_dices.emplace(_self, [&](auto &gdice) {
+        gdice.nextgameid = 0;
       });
+    }
 
-      // Create a new red package
-      auto itr = red_packages.emplace(_self, [&](auto &package) {
-        package.id = gdice_itr->nextgameid; // !
-        package.total_amount = total_amount;
-        package.people_limit = people_limit;
-        package.deadline = eosio::time_point_sec(0);
-      });    
+    // Increment global red package counter
+    global_dices.modify(gdice_itr, 0, [&](auto &gdice) {
+      gdice.nextgameid++;
+    });
 
-/*    require_auth(from);
+    // Create a new red package
+    auto itr = red_packages.emplace(_self, [&](auto &package) {
+      package.id = gdice_itr->nextgameid; // !
+      package.total_amount = total_amount;
+      package.people_limit = people_limit;
+      package.deadline = eosio::time_point_sec(0);
+    });
+
+    /*    require_auth(from);
     if (Red.find(from) != Red.end())
     {
       eosio_assert(Red[from]->ledger.size() == Red[from]->people_limit, "This Sender already has a Red Envelope.");
     }
     Red[from] = new red(people_limit, quantity.amount, "");*/
   }
-
   void take(const account_name taker, const uint64_t red_package_id)
   {
     auto itr = red_packages.find(red_package_id);
     eosio_assert(itr != red_packages.end(), "This Red Envelope is not exist.");
-
-    //eosio_assert(Red.find(sender) != Red.end(), "This Red Envelope is not exist.");
+    eosio_assert(itr->ledger_account.size() < itr->people_limit, "This Red Envelope is empty.");
+    // red_packages.modify(itr, 0, [&](auto &package) {
+    //    asset amount = package.take(taker);
+    //     action(
+    //       permission_level{_self, N(active)},
+    //       N(eosio.token), N(transfer),
+    //       std::make_tuple(_self, taker, amount, std::string("")))
+    //       .send();
+    // });
 
     /*
     uint64_t amount = Red[sender]->take(taker);
@@ -395,6 +372,33 @@ private:
 
     EOSLIB_SERIALIZE(offer, (id)(owner)(bet)(commitment)(gameid))
   };
+  //@abi table red i64
+  struct red
+  {
+    uint64_t id;
+    asset total_amount;                       // 总金额
+    uint64_t people_limit;                    // 总人数
+    std::string description;                  // 红包描述
+    std::vector<account_name> ledger_account; // 红包账本
+    std::vector<asset> ledger_asset;          // ..
+    eosio::time_point_sec deadline;
+
+    uint64_t primary_key() const { return id; }
+    asset take(account_name taker)
+    {
+      require_auth(taker);
+      for (auto i: ledger_account) {
+        eosio_assert(i != taker, "Already take one!");
+      }
+      ledger_account.push_back( taker );
+      ledger_asset.push_back( total_amount);
+      ledger_asset.back() /= people_limit;
+      return ledger_asset.back();
+    }
+    EOSLIB_SERIALIZE(red, (id)(total_amount)(people_limit)(description)(ledger_account)(ledger_asset))
+  };
+
+  typedef eosio::multi_index<N(red), red> red_packages_index;
 
   typedef eosio::multi_index<N(offer), offer,
                              indexed_by<N(bet), const_mem_fun<offer, uint64_t, &offer::by_bet>>,
@@ -456,7 +460,6 @@ private:
   };
 
   typedef eosio::multi_index<N(account), account> account_index;
-  typedef eosio::multi_index<N(red), red> red_packages_index;
 
   offer_index offers;
   game_index games;
