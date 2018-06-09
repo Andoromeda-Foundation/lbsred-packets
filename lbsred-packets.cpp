@@ -81,13 +81,16 @@ public:
   }
   void take(const account_name taker, const uint64_t red_package_id)
   {
+    require_auth(taker);    
     auto itr = red_packages.find(red_package_id);
     eosio_assert(itr != red_packages.end(), "This Red Envelope is not exist.");
     eosio_assert(itr->ledger_account.size() < itr->people_limit, "This Red Envelope is empty.");
     red_packages.modify(itr, 0, [&](auto &package) {
        asset amount = package.take(taker);
-        action(
-          permission_level{_self, N(active)},
+       print_f('!', amount);
+
+       action(
+         permission_level{_self, N(active)},
           N(eosio.token), N(transfer),
           std::make_tuple(_self, taker, amount, std::string("")))
           .send();
