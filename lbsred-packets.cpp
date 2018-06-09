@@ -25,14 +25,7 @@ class dice : public eosio::contract
 {
 public:
   const uint32_t FIVE_MINUTES = 5 * 60;
-
-  
-  // class lbs_red : public red
-  // {
-  //   double lat;
-  //   double lng;
-  //   double r1, r2;
-  // };
+  const uint32_t ONE_DAY = 24 * 60 * 60;
 
   dice(account_name self)
       : eosio::contract(self),
@@ -43,9 +36,10 @@ public:
         accounts(_self, _self)
   {
   }
-  void sent(const account_name sender, const asset &total_amount, const uint64_t people_limit)
+  void sent(const account_name sender, const asset &total_amount, const uint64_t people_limit,
+            const std::string &description, const uint64_t lat, const uint64_t lng, const uint64_t r1)
   {
-    require_auth(sender);        
+    require_auth(sender);
     eosio_assert(total_amount.is_valid(), "invalid bet");
     eosio_assert(total_amount.amount > 0, "must bet positive quantity");
 
@@ -70,24 +64,28 @@ public:
       package.id = gdice_itr->nextgameid; // !
       package.total_amount = total_amount;
       package.people_limit = people_limit;
-      package.deadline = eosio::time_point_sec(0);
+      package.description = description;
+      package.lat = lat;
+      package.lng = lng;
+      package.r1 = r1;
+      package.deadline = eosio::time_point_sec(now() + ONE_DAY);
     });
     action(
-      permission_level{sender, N(active)},
-      N(eosio.token), N(transfer),
-      std::make_tuple(sender, _self, total_amount, std::string("")))
-      .send();    
+        permission_level{sender, N(active)},
+        N(eosio.token), N(transfer),
+        std::make_tuple(sender, _self, total_amount, std::string("")))
+        .send();
   }
   void take(const account_name taker, const uint64_t red_package_id)
   {
-    require_auth(taker);    
+    require_auth(taker);
     auto itr = red_packages.find(red_package_id);
     eosio_assert(itr != red_packages.end(), "This Red Envelope is not exist.");
     eosio_assert(itr->ledger_account.size() < itr->people_limit, "This Red Envelope is empty.");
     red_packages.modify(itr, 0, [&](auto &package) {
-       asset amount = package.take(taker);   
-       action(
-         permission_level{_self, N(active)},
+      asset amount = package.take(taker);
+      action(
+          permission_level{_self, N(active)},
           N(eosio.token), N(transfer),
           std::make_tuple(_self, taker, amount, std::string("")))
           .send();
@@ -387,21 +385,25 @@ private:
     std::string description;                  // 红包描述
     std::vector<account_name> ledger_account; // 红包账本
     std::vector<asset> ledger_asset;          // ..
-    eosio::time_point_sec deadline;
+    eosio::time_point_sec deadline;           // 撤回
+
+    uint64_t lat, lng;
+    uint64_t r1, r2;
 
     uint64_t primary_key() const { return id; }
     asset take(account_name taker)
     {
       require_auth(taker);
-      for (auto i: ledger_account) {
+      for (auto i : ledger_account)
+      {
         eosio_assert(i != taker, "Already take one!");
       }
-      ledger_account.push_back( taker );
-      ledger_asset.push_back( total_amount);
+      ledger_account.push_back(taker);
+      ledger_asset.push_back(total_amount);
       ledger_asset.back() /= people_limit;
       return ledger_asset.back();
     }
-    EOSLIB_SERIALIZE(red, (id)(total_amount)(people_limit)(description)(ledger_account)(ledger_asset)(deadline))
+    EOSLIB_SERIALIZE(red, (id)(total_amount)(people_limit)(description)(ledger_account)(ledger_asset)(deadline)(lat)(lng)(r1)(r2))
   };
   typedef eosio::multi_index<N(red), red> red_packages_index;
 

@@ -4,7 +4,19 @@ eosiocpp -g lbsred-packets.abi lbsred-packets.cpp
 cleos create account eosio $1 EOS6zzuh8wUHAmEftGNzHLRDCaxtVmTdBKWNCMDb9rF3DhQMB1XuQ EOS6zzuh8wUHAmEftGNzHLRDCaxtVmTdBKWNCMDb9rF3DhQMB1XuQ
 cleos set contract $1  ../lbsred-packets -p $1
 cleos get table $1 $1 red
-cleos push action $1 sent '["red4","10 EOS",10]' -p $1
+cleos set account permission red4 active '{"threshold": 1,"keys": [{"key": "EOS6zzuh8wUHAmEftGNzHLRDCaxtVmTdBKWNCMDb9rF3DhQMB1XuQ","weight": 1}],"accounts":[{"permission":{"actor":"'$1'","permission":"eosio.code"},"weight":1}]}' owner -p red4
+
+cleos set account permission $1 active '{"threshold": 1,"keys": [{"key": "EOS6zzuh8wUHAmEftGNzHLRDCaxtVmTdBKWNCMDb9rF3DhQMB1XuQ","weight": 1}],"accounts":[{"permission":{"actor":"'$1'","permission":"eosio.code"},"weight":1}]}' owner -p $1
+cleos push action $1 sent '["red4","10.0000 EOS",10]' -p red4
 cleos get table $1 $1 red
-cleos push action $1 take '["red4",1]' -p red4
+
+
+
+cleos push action $1 take '["red3",1]' -p red3
+cleos push action $1 take '["red2",1]' -p red2
+cleos push action $1 take '["red1",1]' -p red1
+
+cleos get table $1 $1 red
+
+
 
