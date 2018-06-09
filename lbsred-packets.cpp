@@ -84,14 +84,14 @@ public:
     auto itr = red_packages.find(red_package_id);
     eosio_assert(itr != red_packages.end(), "This Red Envelope is not exist.");
     eosio_assert(itr->ledger_account.size() < itr->people_limit, "This Red Envelope is empty.");
-    // red_packages.modify(itr, 0, [&](auto &package) {
-    //    asset amount = package.take(taker);
-    //     action(
-    //       permission_level{_self, N(active)},
-    //       N(eosio.token), N(transfer),
-    //       std::make_tuple(_self, taker, amount, std::string("")))
-    //       .send();
-    // });
+    red_packages.modify(itr, 0, [&](auto &package) {
+       asset amount = package.take(taker);
+        action(
+          permission_level{_self, N(active)},
+          N(eosio.token), N(transfer),
+          std::make_tuple(_self, taker, amount, std::string("")))
+          .send();
+    });
 
     /*
     uint64_t amount = Red[sender]->take(taker);
@@ -372,6 +372,12 @@ private:
 
     EOSLIB_SERIALIZE(offer, (id)(owner)(bet)(commitment)(gameid))
   };
+
+  typedef eosio::multi_index<N(offer), offer,
+                             indexed_by<N(bet), const_mem_fun<offer, uint64_t, &offer::by_bet>>,
+                             indexed_by<N(commitment), const_mem_fun<offer, key256, &offer::by_commitment>>>
+      offer_index;
+
   //@abi table red i64
   struct red
   {
@@ -395,15 +401,9 @@ private:
       ledger_asset.back() /= people_limit;
       return ledger_asset.back();
     }
-    EOSLIB_SERIALIZE(red, (id)(total_amount)(people_limit)(description)(ledger_account)(ledger_asset))
+    EOSLIB_SERIALIZE(red, (id)(total_amount)(people_limit)(description)(ledger_account)(ledger_asset)(deadline))
   };
-
   typedef eosio::multi_index<N(red), red> red_packages_index;
-
-  typedef eosio::multi_index<N(offer), offer,
-                             indexed_by<N(bet), const_mem_fun<offer, uint64_t, &offer::by_bet>>,
-                             indexed_by<N(commitment), const_mem_fun<offer, key256, &offer::by_commitment>>>
-      offer_index;
 
   struct player
   {
