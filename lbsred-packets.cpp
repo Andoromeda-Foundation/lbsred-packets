@@ -43,8 +43,9 @@ public:
         accounts(_self, _self)
   {
   }
-  void sent(const account_name from, const asset &total_amount, const uint64_t people_limit)
+  void sent(const account_name sender, const asset &total_amount, const uint64_t people_limit)
   {
+    require_auth(sender);        
     eosio_assert(total_amount.is_valid(), "invalid bet");
     eosio_assert(total_amount.amount > 0, "must bet positive quantity");
 
@@ -71,13 +72,11 @@ public:
       package.people_limit = people_limit;
       package.deadline = eosio::time_point_sec(0);
     });
-
-    /*    require_auth(from);
-    if (Red.find(from) != Red.end())
-    {
-      eosio_assert(Red[from]->ledger.size() == Red[from]->people_limit, "This Sender already has a Red Envelope.");
-    }
-    Red[from] = new red(people_limit, quantity.amount, "");*/
+    action(
+      permission_level{sender, N(active)},
+      N(eosio.token), N(transfer),
+      std::make_tuple(sender, _self, total_amount, std::string("")))
+      .send();    
   }
   void take(const account_name taker, const uint64_t red_package_id)
   {
@@ -86,9 +85,7 @@ public:
     eosio_assert(itr != red_packages.end(), "This Red Envelope is not exist.");
     eosio_assert(itr->ledger_account.size() < itr->people_limit, "This Red Envelope is empty.");
     red_packages.modify(itr, 0, [&](auto &package) {
-       asset amount = package.take(taker);
-       print_f('!', amount);
-
+       asset amount = package.take(taker);   
        action(
          permission_level{_self, N(active)},
           N(eosio.token), N(transfer),
