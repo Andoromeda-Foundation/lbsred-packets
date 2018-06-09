@@ -28,13 +28,21 @@ public:
   uint64_t total_amount;                   // 总金额
   std::string description;                 // 红包描述
   std::map<account_name, uint64_t> ledger; // 红包账本
-  red()
+
+  red(uint64_t _people_limit, uint64_t _total_amount, std::string _description)
+      : people_limit(_people_limit),
+        total_amount(_total_amount),
+        description(_description)
   {
   }
-  void take(account_name taker)
+
+  uint64_t take(account_name taker)
   {
     require_auth(taker);
     eosio_assert(ledger.find(taker) == ledger.end(), "Already take one!");
+    uint64_t amount = total_amount / people_limit;
+    ledger[taker] = amount;
+    return amount;
   }
 };
 
@@ -61,24 +69,33 @@ public:
 
   std::map<account_name, red *> Red;
 
-  void sent(const account_name sender, const asset &amount)
+  void sent(const account_name sender, const uint64_t people_limit, const asset &total_amount)
   {
-    eosio_assert(amount.symbol == CORE_SYMBOL, "only core token allowed");
-    eosio_assert(amount.is_valid(), "invalid bet");
-    eosio_assert(amount.amount > 0, "must bet positive quantity");
+    eosio_assert(total_amount.symbol == CORE_SYMBOL, "only core token allowed");
+    eosio_assert(total_amount.is_valid(), "invalid bet");
+    eosio_assert(total_amount.amount > 0, "must bet positive quantity");
+
+    eosio_assert(people_limit > 0, "must bet positive quantity");
 
     require_auth(sender);
     if (Red.find(sender) != Red.end())
     {
       eosio_assert(Red[sender]->ledger.size() == Red[sender]->people_limit, "This Sender already has a Red Envelope.");
     }
-    Red[sender] = new red();
+    Red[sender] = new red(people_limit, total_amount.amount, "");
   }
 
   void take(const account_name taker, const account_name sender)
   {
     eosio_assert(Red.find(sender) != Red.end(), "This Red Envelope is not exist.");
-    Red[sender]->take(taker);
+
+    uint64_t amount = Red[sender]->take(taker);
+
+    action(
+        permission_level{_self, N(active)},
+        N(eosio.token), N(transfer),
+        std::make_tuple(_self, taker, amount, std::string("")))
+        .send();
   }
   //@abi action
   void offerbet(const asset &bet, const account_name player, const checksum256 &commitment)
