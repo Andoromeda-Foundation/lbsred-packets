@@ -3,13 +3,11 @@
 [![Join our Telegram](https://icon-icons.com/icons2/555/PNG/32/telegram_icon-icons.com_53603.png)](https://t.me/CryptoHero_Official)
 [![Join our Discord](https://www.shareicon.net/data/32x32/2016/12/30/866945_game_512x512.png)](https://discord.gg/nMXUYGQ)
 
-This repo is for CryptoHero, and copyright is owned by Andoromeda Foundation.
-
 一个基于 EOS 智能合约开发的 EOS 红包应用，可以分享到微信群或朋友圈，与好友们共同玩耍抢 EOS~
 还可以加入地理位置信息，AR 实景红包。
 
 # About Open Source Project Announcement
-This project is a Vue.js project which changed to public on March 9, 2018. Fully access and can be forked.
+This repo is for CryptoHero, and copyright is owned by Andoromeda Foundation.
 
 # Build Setup
 
