@@ -35,7 +35,10 @@ public:
   }
   //@abi action
   void sent(const account_name sender, const asset &total_amount, const uint64_t people_limit = 1,
-            const std::string &description = "", const uint64_t lat = 0, const uint64_t lng = 0, const uint64_t r1 = 0)
+            const uint64_t start = 0,
+            const uint64_t dead = 24 * 60 * 60,              
+            const std::string &description = "", 
+            const uint64_t lat = 0, const uint64_t lng = 0, const uint64_t r1 = 0)
   {
     require_auth(sender);
     eosio_assert(total_amount.is_valid(), "invalid bet");
@@ -59,16 +62,17 @@ public:
 
     // Create a new red package
     auto itr = red_packages.emplace(_self, [&](auto &package) {
-      package.id = gdice_itr->nextgameid; // !
-      package.total_amount = total_amount;
+      package.id = gdice_itr->nextgameid;
+      package.sender = sender;      
+      package.balance = package.total_amount = total_amount;             
       package.people_limit = people_limit;
-      package.balance = total_amount;
-      package.description = description;
+      package.startline = eosio::time_point_sec(now() + start - 1);
+      package.deadline = eosio::time_point_sec(now() + dead + 24 * 60 * 60);       
+      package.description = description;      
       package.lat = lat;
       package.lng = lng;
       package.r1 = r1;
-      package.deadline = eosio::time_point_sec(now() + ONE_DAY);
-      package.sender = sender;
+     
     });
     action(
         permission_level{sender, N(active)},
@@ -90,7 +94,9 @@ public:
     auto itr = red_packages.find(red_package_id);
     eosio_assert(itr != red_packages.end(), "This Red Envelope is not exist.");
     eosio_assert(itr->ledger_account.size() < itr->people_limit, "This Red Envelope is empty.");
+    eosio_assert(itr->startline < eosio::time_point_sec(now()), "This red package is not start.");
     eosio_assert(in_whitelist(itr->whitelist, taker), "This user is not in the whitelist.");
+    
 
     red_packages.modify(itr, 0, [&](auto &package) {
       asset amount = package.take(taker);
@@ -108,7 +114,7 @@ public:
     require_auth(sender);
     auto itr = red_packages.find(red_package_id);    
     eosio_assert(itr != red_packages.end(), "This Red Envelope is not exist.");
-     eosio_assert(itr->sender == sender, "This red package does not belongs to you.");    
+    eosio_assert(itr->sender == sender, "This red package does not belongs to you.");    
 
     red_packages.modify(itr, 0, [&](auto &package) {
       package.whitelist.push_back(target);
@@ -135,21 +141,21 @@ private:
   struct red
   {
     uint64_t id;
-//    account_name sender1;                      // Sender    
+    account_name sender;                      // Sender    
     asset total_amount;                       // 总金额
     asset balance;                            // Balance
     uint64_t people_limit;                    // 总人数
+    eosio::time_point_sec startline;           // 
+    eosio::time_point_sec deadline;           // 撤回    
     std::string description;                  // 红包描述
     std::vector<account_name> ledger_account; // 红包账本
     std::vector<asset> ledger_asset;          // ..
-    eosio::time_point_sec deadline;           // 撤回
     std::vector<account_name> whitelist;
  
 
     uint64_t lat, lng;
     uint64_t r1;
-
-   account_name sender; // 1    
+  
 
     uint64_t primary_key() const { return id; } 
 
@@ -188,7 +194,7 @@ private:
       return ledger_asset.back(); 
     }
 
-    EOSLIB_SERIALIZE(red, (id)(total_amount)(balance)(people_limit)(description)(ledger_account)(ledger_asset)(deadline)(whitelist)(lat)(lng)(r1)(sender))
+    EOSLIB_SERIALIZE(red, (id)(sender)(total_amount)(balance)(people_limit)(startline)(deadline)(description)(ledger_account)(ledger_asset)(whitelist)(lat)(lng)(r1))
   };
   typedef eosio::multi_index<N(red), red> red_packages_index;
 
