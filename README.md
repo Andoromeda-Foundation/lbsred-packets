@@ -2,7 +2,8 @@
 
 [![Join our Telegram](https://icon-icons.com/icons2/555/PNG/32/telegram_icon-icons.com_53603.png)](https://t.me/CryptoHero_Official)
 [![Join our Discord](https://www.shareicon.net/data/32x32/2016/12/30/866945_game_512x512.png)](https://discord.gg/nMXUYGQ)
-[![Follow our Twitter](https://www.shareicon.net/data/32x32/2016/12/30/866945_game_512x512.png)](https://twitter.com/redredpocket)
+[![Follow our Twitter](https://upload.cc/i1/2018/06/10/fCiEub.png
+)](https://twitter.com/redredpocket)
 
 ![EOS Red Packet](https://upload.cc/i1/2018/06/10/JUqOCF.jpeg)
 
