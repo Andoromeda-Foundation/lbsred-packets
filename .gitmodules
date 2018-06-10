@@ -1,0 +1,3 @@
+[submodule "redpack-frontend"]
+	path = redpack-frontend
+	url = https://github.com/frankwei98/redpack-frontend
