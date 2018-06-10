@@ -4,6 +4,7 @@
 [![Join our Discord](https://www.shareicon.net/data/32x32/2016/12/30/866945_game_512x512.png)](https://discord.gg/nMXUYGQ)
 [![Follow our Twitter](https://www.shareicon.net/data/32x32/2016/12/30/866945_game_512x512.png)](https://twitter.com/redredpocket)
 
+![EOS Red Packet](https://upload.cc/i1/2018/06/10/JUqOCF.jpeg)
 
 # About Open Source Project Announcement
 This is EOS LBS red packet dapp, build on the EOS Hongkong hackathon event.
